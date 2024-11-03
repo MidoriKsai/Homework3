@@ -63,159 +63,109 @@
 ## Задание 2
 ### Создать 10 сцен на Unity с изменяющимся уровнем сложности.
 
-Нам нужно было создать 10 сцен и изменить там параметры EnemyDragon в инспекторе.
+Нам нужно было создать 10 сцен и изменить там параметры EnemyDragon в инспекторе, что я и сделала.
+![UnityDP(scene)](https://github.com/MidoriKsai/Homework3/blob/main/UnityDP(scene).png)
 
 ## Задание 3
-### Настроить на сцене Unity воспроизведение звуковых файлов, описывающих динамику изменения выбранной переменной.
+### Визуализировать данные из google-таблицы, и с помощью Python передать в проект Unity. В Python данные также должны быть визуализированы.
 
-Я написала код, который загружает информацию о монетах, полученных за разные действия в игре: подбор монет с зомби, попадание по зомби(для коллектора), сбор монет из сундука, убийство босса. В зависимости от случайно выбранного действия, он воспроизводит соответствующий звук и выводит сообщение в консоль с информацией о количестве полученных монет и волне. После каждого звука выбирается новое случайное действие.
+Код для вывода таблицы из GoogleSheets с помощью Python
+![PythonDP](https://github.com/MidoriKsai/Homework3/blob/main/PythonDP.png)
 
+Код для передачи данных в Unity
 ```csharp
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Networking;
-using SimpleJSON;
+using Newtonsoft.Json.Linq;
 
-public class NewBehaviourScript : MonoBehaviour
+public class EnemyDragon : MonoBehaviour
 {
-    public AudioClip coinPickup;
-    public AudioClip bossKill;
-    public AudioClip hitZombie;
-    public AudioClip chestCollect;
+  public GameObject dragonEggPrefab;
+  public float speed = 1;
+  public float timeBetweenEggDrops = 1f;
+  public float leftRightDistance = 10f;
+  public float chanceDirection = 0.1f;
+  public int lvlNumber = 0;
 
-    private AudioSource audioSource;
-    private Dictionary<string, List<float>> dataSet = new Dictionary<string, List<float>>();
-    private bool statusStart = false;
-    private int i = 1;
-    private int r = -1;
+  private string sheetId = "1wS8rGyOEgJLOPOv45qXWkdj3O-NInPqLVthZDWIjTtA";
+  private string apiKey = "AIzaSyA4ZArvrYjVrdmsjiLnKJJH4r25PzAYc7w";
 
-    void Start()
-    {
-        StartCoroutine(GoogleSheets());
-        r = Random.Range(0,4);
-    }
+  void Start()
+  {
+      StartCoroutine(GetDataFromSheet());
+      Invoke("DropEgg", 2f);
+  }
 
-   void Update()
-    {
-        if (r == 0 & statusStart == false & i != dataSet.Count && dataSet.Count > 0)
-        {
-            StartCoroutine(PlayCoinPickup());
-            Debug.Log($"Подобрано {dataSet[i.ToString()][0]} монет с зомби на волне {i}");
-        }
+  void DropEgg(){
+      Vector3 myVector = new Vector3(0.0f, 5.0f, 0.0f);
+      GameObject egg = Instantiate<GameObject>(dragonEggPrefab);
+      egg.transform.position = transform.position + myVector;
+      Invoke("DropEgg", timeBetweenEggDrops);
+  }
 
-        if (r == 1 & statusStart == false & i != dataSet.Count && dataSet.Count > 0)
-        {
-            StartCoroutine(PlayHitZombie());
-            Debug.Log($"Получено {dataSet[i.ToString()][1]} монет при попадании по зомби на волне {i}");
-        }
+  void Update()
+  {
+      Vector3 pos = transform.position;
+      pos.x += speed * Time.deltaTime;
+      transform.position = pos;
 
-        if (r == 2 & statusStart == false & i != dataSet.Count && dataSet.Count > 0)
-        {
-            StartCoroutine(PlayChestCollect());
-            Debug.Log($"Подобрано {dataSet[i.ToString()][2]} монет с сундука на волне {i}");
-        }
+      if (pos.x < -leftRightDistance){
+          speed = Mathf.Abs(speed);
+      }
+      else if (pos.x > leftRightDistance){
+          speed = -Mathf.Abs(speed);
+      }
+  }
 
-        if (r == 3 & statusStart == false & i != dataSet.Count && dataSet.Count > 0)
-        {
-            StartCoroutine(PlayBossKill());
-            Debug.Log($"Подобрано {dataSet[i.ToString()][3]} монет после убийства босса зомби на волне {i}");
-        }
-    }
+  private void FixedUpdate() {
+      if (Random.value < chanceDirection){
+          speed *= -1;
+      }
+  }
 
+   IEnumerator GetDataFromSheet()
+  {
+      Debug.Log("Here");
+      var charList = new List<string> {"B","C","D","E","F","G","H","I","J","K"};
+      var charToPut = charList[lvlNumber-1];
+      Debug.Log(charToPut);
+      string url = $"https://sheets.googleapis.com/v4/spreadsheets/{sheetId}/values/Лист1!{charToPut}2:{charToPut}5?key={apiKey}";
+      Debug.Log(url);
 
-    IEnumerator GoogleSheets()
-    {
+      using (UnityWebRequest request = UnityWebRequest.Get(url))
+      {
+          yield return request.SendWebRequest();
 
-        UnityWebRequest curentResp = UnityWebRequest.Get("https://sheets.googleapis.com/v4/spreadsheets/1RaUU1MMcGxMPK9rB6YMvyBTWJe8L2n_XkAs_iK6XCc8/values/Лист1?key=AIzaSyDpLgHJlPOMMlKG-Ul-5c3RovWkAG_hX14");
-        yield return curentResp.SendWebRequest();
-        string rawResp = curentResp.downloadHandler.text;
-        var rawJson = JSON.Parse(rawResp);
-        var temp = 0;
-        foreach (var itemRawJson in rawJson["values"])
-        {
-            if (temp == 0)
-            {
-                temp = 1;
-                continue;
-            }
-            var parseJson = JSON.Parse(itemRawJson.ToString());
-            var selectRow = parseJson[0].AsStringList;
-            dataSet.Add(selectRow[0], new List<float> 
-            {
-                float.Parse(selectRow[2]),
-                float.Parse(selectRow[3]),
-                float.Parse(selectRow[4]),
-                float.Parse(selectRow[5]) 
-            });
-        }
-    }
+          if (request.result == UnityWebRequest.Result.Success)
+          {
+                              
+              JObject json = JObject.Parse(request.downloadHandler.text);
+              JArray values = (JArray)json["values"];
+              Debug.Log(values);
 
-    IEnumerator PlayCoinPickup()
-    {
-        statusStart = true;
-        audioSource = GetComponent<AudioSource>();
-        audioSource.clip = coinPickup;
-        audioSource.Play();
-        yield return new WaitForSeconds(3);
-        statusStart = false;
-        r = Random.Range(0,4);
-        i++;
-    }
-
-    IEnumerator PlayHitZombie()
-    {
-        statusStart = true;
-        audioSource = GetComponent<AudioSource>();
-        audioSource.clip = hitZombie;
-        audioSource.Play();
-        yield return new WaitForSeconds(3);
-        statusStart = false;
-        r = Random.Range(0,4);
-        i++;
-    }
-
-    IEnumerator PlayBossKill()
-    {
-        statusStart = true;
-        audioSource = GetComponent<AudioSource>();
-        audioSource.clip = bossKill;
-        audioSource.Play();
-        yield return new WaitForSeconds(3);
-        statusStart = false;
-        r = Random.Range(0,4);
-        i++;
-    }
-
-    IEnumerator PlayChestCollect()
-    {
-        statusStart = true;
-        audioSource = GetComponent<AudioSource>();
-        audioSource.clip = chestCollect;
-        audioSource.Play();
-        yield return new WaitForSeconds(3);
-        statusStart = false;
-        r = Random.Range(0,4);
-        i++;
-    }
-}
-
+              if (values != null && values.Count > 0)
+              {
+                  
+                  speed = float.Parse((string)values[0][0]);
+                  timeBetweenEggDrops = float.Parse((string)values[3][0]); 
+                  leftRightDistance = float.Parse((string)values[1][0]); 
+                  chanceDirection = float.Parse((string)values[2][0]); 
+              }
+          }
+          else
+          {
+              Debug.LogError($"Error fetching data: {request.error}");
+          }
+      }
+   }
+} 
 ```
-![UnityProject](https://github.com/MidoriKsai/Homework2/blob/main/unityProject.png)
-![UnityConsole](https://github.com/MidoriKsai/Homework2/blob/main/unityConsole.png)
-
-## Задание 4
-###  Придумать как применить в игре указанной выше способ.
-
-- К каждой монете, которая лежит на полу можно применять тег: каким способом она была получена (умер босс, обычный зомби, выпала из сундука),
- либо она была получена путем нанисения урона зомби при улучшениии 'Коллектор'. Таким образом, соотпетственно тегу мы можем воспроизводить звуки в Unity.
-Запись данных в таблицу позволит собрать статистику, благодаря которой можно забалансить получение монет каким-то способом, и если он рушит баланс,
-то можнор поменять множитель получения монет в необходимую сторону.
-
 
 ## Выводы
 
-Мы научились передавать в Unity данные из Google Sheets с помощью Python, при помощи csharp добавили звуки в Unity, а также сделали анализ игровой валюты в СПАСТИ РТФ: Выживание.
+Работа над балансировкой параметров игры в Dragon Picker показала, как ключевые переменные, такие как скорость движения, вероятность смены направления и частота падения предметов, напрямую влияют на игровой процесс. Эти параметры задают темп и сложность игры, и их корректная настройка позволяет создавать постепенно усложняющийся игровой опыт.
 
 | Plugin | README |
 | ------ | ------ |
